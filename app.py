@@ -1,8 +1,11 @@
+from __future__ import annotations
 from fastapi import FastAPI
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from pydantic import BaseModel
 import numpy as np
 import uuid
+
 
 app = FastAPI()
 @app.get("/")
@@ -80,3 +83,24 @@ class FilteredVectorStore:
     return results
   
 
+# Instancia global del store 
+vector_store = FilteredVectorStore(model)
+documents_db = {}
+
+def chunking(text, chunk_size=400):
+    # Pedazos del texto original 
+    chunks = []
+
+    for i in range(0, len(text), chunk_size):
+        chunks.append(text[i:i + chunk_size])
+
+    return chunks
+
+class Metadata(BaseModel):
+    author: str
+    category: str
+    source: str
+
+class DocumentRequest(BaseModel):
+    text: str
+    metadata: Metadata
