@@ -84,6 +84,8 @@ class FilteredVectorStore:
 
 # Instancia global del store 
 vector_store = FilteredVectorStore(model)
+
+# Nuestra base de datos
 documents_db = {}
 
 def chunking(text, chunk_size=400):
@@ -147,4 +149,21 @@ def create_document(doc: DocumentRequest):
         "message": "Documento agregado",
         "document_id": document_id,
         "chunks": len(chunks)
+    }
+
+# GET documents/{id}: Obtener un documento específico (completo, no solo fragmentos) 
+@app.get("/documents/{document_id}")
+def get_document(document_id: str):
+
+    # Verificar si existe
+    if document_id not in documents_db:
+        return {
+            "error": "Documento no encontrado"
+        }
+
+    # Regresar documento completo
+    return {
+        "document_id": document_id,
+        "text": documents_db[document_id]["text"],
+        "metadata": documents_db[document_id]["metadata"]
     }
