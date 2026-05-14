@@ -3,19 +3,17 @@ from fastapi import FastAPI
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from pydantic import BaseModel
+from typing import Optional, Dict, List
 import numpy as np
 import uuid
 
 
 app = FastAPI()
-@app.get("/")
-def root():
-    return {"message": "API funcionando"}
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 class Document:
-  def __init__(self, text: str, metadata: dict[str, str]):
+  def __init__(self, text: str, metadata: Dict[str, str]):
     self.text = text
     self.metadata = metadata
 
@@ -30,13 +28,13 @@ class FilteredVectorStore:
     self.documents = []
     self.embeddings = []
 
-  def add_documents(self, documents: list[Document]):
+  def add_documents(self, documents: List[Document]):
     self.documents.extend(documents)
     texts = [doc.text for doc in documents]
     new_embeddings = self.embedding_model.encode(texts, convert_to_numpy=True)
     self.embeddings.extend(new_embeddings)
 
-  def search(self, query: str,top_k: int = 5,metadata_filter: dict[str, str] | None = None) -> list[SearchResult]:
+  def search(self, query: str, top_k: int = 5, metadata_filter: Optional[Dict[str, str]] = None) -> List[SearchResult]:
     query_embedding = self.embedding_model.encode([query],convert_to_numpy=True)
 
     filtered_docs = []
@@ -97,14 +95,22 @@ def chunking(text, chunk_size=400):
 
     return chunks
 
+# Para que se requiera el metadata
 class Metadata(BaseModel):
     author: str
     category: str
     source: str
 
+# Lo que esperara para el POST
 class DocumentRequest(BaseModel):
     text: str
     metadata: Metadata
+
+# Uso de FilteredVectorStore
+class SearchRequest(BaseModel):
+    query: str
+    top_k: int = 3
+    metadata_filter: Optional[Dict[str, str]] = None
 
 # POST documents: Crear documentos 
 @app.post("/documents")
@@ -166,4 +172,31 @@ def get_document(document_id: str):
         "document_id": document_id,
         "text": documents_db[document_id]["text"],
         "metadata": documents_db[document_id]["metadata"]
+    }
+
+# POST documents/search: Realiza la búsqueda semántica (incluye el porcentaje de similitud, el texto y los metadatos)
+@app.post("/documents/search")
+def search_documents(search_request: SearchRequest):
+
+    # Búsqueda semántica
+    results = vector_store.search(
+        query=search_request.query,
+        top_k=search_request.top_k,
+        metadata_filter=search_request.metadata_filter
+    )
+
+    response = []
+
+    # Resultados a JSON
+    for r in results:
+
+        response.append({
+            "score": round(r.score * 100, 2),
+            "text": r.document.text,
+            "metadata": r.document.metadata
+        })
+
+    return {
+        "query": search_request.query,
+        "results": response
     }
