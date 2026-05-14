@@ -12,7 +12,6 @@ app = FastAPI()
 def root():
     return {"message": "API funcionando"}
 
-
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 class Document:
@@ -104,3 +103,48 @@ class Metadata(BaseModel):
 class DocumentRequest(BaseModel):
     text: str
     metadata: Metadata
+
+# POST documents: Crear documentos 
+@app.post("/documents")
+def create_document(doc: DocumentRequest):
+
+    # Generar ID único
+    document_id = str(uuid.uuid4())
+
+    # Guardar documento original
+    documents_db[document_id] = {
+        "text": doc.text,
+        "metadata": doc.metadata.dict()
+    }
+
+    # Chunking si texto es grande
+    if len(doc.text) > 500:
+        chunks = chunking(doc.text)
+    else:
+        chunks = [doc.text]
+
+    vector_documents = []
+
+    # Crear documentos para vector store
+    for chunk in chunks:
+
+        metadata = doc.metadata.dict()
+
+        # Agregar ID original
+        metadata["document_id"] = document_id
+
+        vector_documents.append(
+            Document(
+                text=chunk,
+                metadata=metadata
+            )
+        )
+
+    # Agregar chunks al vector store
+    vector_store.add_documents(vector_documents)
+
+    return {
+        "message": "Documento agregado",
+        "document_id": document_id,
+        "chunks": len(chunks)
+    }
